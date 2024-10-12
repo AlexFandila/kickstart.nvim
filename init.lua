@@ -192,6 +192,10 @@ vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper win
 vim.keymap.set('n', '<C-v>', vim.cmd.vsplit, { desc = 'Open vsplit tab' })
 vim.keymap.set('n', '<C-s>', vim.cmd.split, { desc = 'Open split tab' })
 vim.keymap.set('n', '<leader>e', vim.cmd.Explore, { desc = 'Open explore tab' })
+vim.keymap.set('n', '<leader>ñ', ':split | terminal<CR> i', { desc = 'Open horizontal terminal' })
+
+-- Python
+vim.keymap.set('n', '<leader>pe', ':!python %<CR>', { desc = '[P]ython [E]xecution' })
 
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
