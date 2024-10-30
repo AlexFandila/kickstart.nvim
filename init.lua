@@ -245,7 +245,104 @@ vim.opt.rtp:prepend(lazypath)
 require('lazy').setup({
   -- NOTE: Plugins can be added with a link (or for a github repo: 'owner/repo' link).
   'tpope/vim-sleuth', -- Detect tabstop and shiftwidth automatically
+  -- Soporte para Python
+  {
+    'python-mode/python-mode',
+    ft = 'python',
+    branch = 'develop',
+    config = function()
+      -- Configuración específica para Python
+      vim.cmd [[
+        autocmd FileType python setlocal
+          \ tabstop=4
+          \ softtabstop=4
+          \ shiftwidth=4
+          \ textwidth=79
+          \ expandtab
+          \ autoindent
+          \ fileformat=unix
+      ]]
 
+      -- Resaltado de sintaxis mejorado para Python
+      vim.g.python_highlight_all = 1
+
+      -- Configuración del formateador Black
+      vim.g.black_virtualenv = '~/.local/share/nvim/black'
+
+      -- Keymaps específicos para Python
+      vim.api.nvim_create_autocmd('FileType', {
+        pattern = 'python',
+        callback = function()
+          -- Ejecutar archivo Python
+          vim.keymap.set('n', '<leader>pr', ':split | terminal python3 %<CR>', { buffer = true, desc = 'Run Python file' })
+          -- Formatear con Black
+          vim.keymap.set('n', '<leader>pb', ':Black<CR>', { buffer = true, desc = 'Format with Black' })
+          -- Toggle breakpoint
+          vim.keymap.set('n', '<leader>db', require('dap').toggle_breakpoint, { buffer = true, desc = 'Toggle Breakpoint' })
+        end,
+      })
+    end,
+  },
+
+  -- Debugger para Python
+  {
+    'mfussenegger/nvim-dap-python',
+    ft = 'python',
+    dependencies = {
+      'mfussenegger/nvim-dap',
+      'rcarriga/nvim-dap-ui',
+    },
+    config = function()
+      require('dap-python').setup '~/.local/share/nvim/mason/packages/debugpy/venv/bin/python'
+      -- Configuración de keymaps para debugging
+      local keymap = vim.keymap.set
+      keymap('n', '<leader>dpr', function()
+        require('dap-python').test_method()
+      end, { desc = 'Debug Python: Test Method' })
+      keymap('n', '<leader>dpc', function()
+        require('dap-python').test_class()
+      end, { desc = 'Debug Python: Test Class' })
+    end,
+  },
+
+  -- LSP Configuration
+  {
+    'neovim/nvim-lspconfig',
+    config = function()
+      -- Configuración de LSP para Python
+      require('lspconfig').pyright.setup {
+        settings = {
+          python = {
+            analysis = {
+              typeCheckingMode = 'basic',
+              autoSearchPaths = true,
+              useLibraryCodeForTypes = true,
+              diagnosticMode = 'workspace',
+            },
+          },
+        },
+      }
+    end,
+  },
+
+  -- Formateador y linter
+  {
+    'stevearc/conform.nvim',
+    opts = {
+      formatters_by_ft = {
+        python = { 'black', 'isort' },
+      },
+    },
+  },
+
+  {
+    'mfussenegger/nvim-lint',
+    config = function()
+      require('lint').linters_by_ft = {
+        python = { 'pylint', 'mypy' },
+      }
+    end,
+  },
   -- NOTE: Plugins can also be added by using a table,
   -- with the first argument being the link and the following
   -- keys can be used to configure plugin behavior/loading/etc.
@@ -1013,6 +1110,7 @@ require('lazy').setup({
   require 'kickstart.plugins.neo-tree',
   require 'kickstart.plugins.gitsigns', -- adds gitsigns recommend keymaps
   require 'kickstart.plugins.obsidian',
+  require 'kickstart.plugins.java',
 
   -- NOTE: The import below can automatically add your own plugins, configuration, etc from `lua/custom/plugins/*.lua`
   --    This is the easiest way to modularize your config.

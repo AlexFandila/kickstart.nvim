@@ -1,7 +1,6 @@
 -- debug.lua
 --
--- Configuración para usar nvim-dap con CodeLLDB para depurar C/C++.
--- Además, incluye soporte para Go si es necesario.
+-- Configuración para usar nvim-dap con CodeLLDB para depurar C/C++ y Python.
 
 return {
   -- Plugin principal para depuración
@@ -19,6 +18,9 @@ return {
     'williamboman/mason.nvim',
     'jay-babu/mason-nvim-dap.nvim',
 
+    -- Depurador para Python
+    'mfussenegger/nvim-dap-python',
+
     -- Depurador para Go, coméntalo si no lo usas
     'leoluz/nvim-dap-go',
   },
@@ -29,10 +31,10 @@ return {
     local dapui = require 'dapui'
     return {
       -- Atajos básicos de depuración
-      { '<leader>dc', dap.continue, desc = 'Debug: Start/Continue' },
-      { '<leader>di', dap.step_into, desc = 'Debug: Step Into' },
-      { '<leader>do', dap.step_over, desc = 'Debug: Step Over' },
-      { '<leader>dt', dap.step_out, desc = 'Debug: Step Out' },
+      { '<F5>', dap.continue, desc = 'Debug: Start/Continue' },
+      { '<F11>', dap.step_into, desc = 'Debug: Step Into' },
+      { '<F10>', dap.step_over, desc = 'Debug: Step Over' },
+      { '<F12>', dap.step_out, desc = 'Debug: Step Out' },
       { '<leader>b', dap.toggle_breakpoint, desc = 'Debug: Toggle Breakpoint' },
       {
         '<leader>B',
@@ -42,7 +44,9 @@ return {
         desc = 'Debug: Set Breakpoint',
       },
       -- Atajo para alternar la UI de depuración
-      { '<F7>', dapui.toggle, desc = 'Debug: Toggle UI' },
+      { '<leader>du', dapui.toggle, desc = 'Debug: Toggle UI' },
+      -- Terminar sesión de debugging
+      { '<leader>dx', dap.terminate, desc = 'Debug: Terminate Session' },
       unpack(keys),
     }
   end,
@@ -56,21 +60,90 @@ return {
     require('mason-nvim-dap').setup {
       -- Instalación automática de adaptadores de depuración
       automatic_installation = true,
-
-      -- Handlers predeterminados, puedes personalizarlos si es necesario
       handlers = {},
-
-      -- Lista de adaptadores a instalar
       ensure_installed = {
         'codelldb', -- Adaptador de depuración para C/C++
-        -- 'delve', -- Descomenta si necesitas depuración para Go
-        -- 'lldb',  -- Remueve si no usas lldb estándar
+        'debugpy', -- Adaptador de depuración para Python
+      },
+    }
+
+    -- Configuración de Python DAP
+    require('dap-python').setup '/usr/bin/python'
+
+    -- Configuración del adaptador de Python
+    dap.adapters.python = {
+      type = 'executable',
+      command = '/usr/bin/python',
+      args = { '-m', 'debugpy.adapter' },
+    }
+
+    -- Configuraciones de lanzamiento para Python
+    dap.configurations.python = {
+      {
+        -- Configuración básica
+        type = 'python',
+        request = 'launch',
+        name = 'Launch file',
+        program = '${file}',
+        pythonPath = function()
+          -- Intenta encontrar el entorno virtual primero
+          local cwd = vim.fn.getcwd()
+          if vim.fn.executable(cwd .. '/venv/bin/python') == 1 then
+            return cwd .. '/venv/bin/python'
+          elseif vim.fn.executable(cwd .. '/.venv/bin/python') == 1 then
+            return cwd .. '/.venv/bin/python'
+          else
+            return '/usr/bin/python'
+          end
+        end,
+      },
+      {
+        -- Configuración para debugging con argumentos
+        type = 'python',
+        request = 'launch',
+        name = 'Launch with arguments',
+        program = '${file}',
+        args = function()
+          local args_string = vim.fn.input 'Arguments: '
+          return vim.split(args_string, ' ')
+        end,
+      },
+      {
+        -- Configuración para attach remoto
+        type = 'python',
+        request = 'attach',
+        name = 'Attach remote',
+        connect = function()
+          local host = vim.fn.input 'Host [127.0.0.1]: '
+          host = host ~= '' and host or '127.0.0.1'
+          local port = tonumber(vim.fn.input 'Port [5678]: ') or 5678
+          return { host = host, port = port }
+        end,
       },
     }
 
     -- Configuración de la UI de depuración
     dapui.setup {
-      icons = { expanded = '▾', collapsed = '▸', current_frame = '*' },
+      layouts = {
+        {
+          elements = {
+            { id = 'scopes', size = 0.25 },
+            { id = 'breakpoints', size = 0.25 },
+            { id = 'stacks', size = 0.25 },
+            { id = 'watches', size = 0.25 },
+          },
+          position = 'left',
+          size = 40,
+        },
+        {
+          elements = {
+            { id = 'repl', size = 0.5 },
+            { id = 'console', size = 0.5 },
+          },
+          position = 'bottom',
+          size = 10,
+        },
+      },
       controls = {
         icons = {
           pause = '⏸',
@@ -91,15 +164,38 @@ return {
     dap.listeners.before.event_terminated['dapui_config'] = dapui.close
     dap.listeners.before.event_exited['dapui_config'] = dapui.close
 
+    -- Configuración de keymaps específicos para Python
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = 'python',
+      callback = function()
+        local opts = { buffer = true }
+        -- Ejecutar archivo Python sin debugging
+        vim.keymap.set('n', '<leader>pr', ':split | terminal python3 %<CR>', { buffer = true, desc = 'Run Python file (no debug)' })
+
+        -- Test methods
+        vim.keymap.set('n', '<leader>dm', function()
+          require('dap-python').test_method()
+        end, { buffer = true, desc = 'Debug Python: Test Method' })
+
+        vim.keymap.set('n', '<leader>dc', function()
+          require('dap-python').test_class()
+        end, { buffer = true, desc = 'Debug Python: Test Class' })
+
+        -- Debug selection
+        vim.keymap.set('n', '<leader>ds', function()
+          require('dap-python').debug_selection()
+        end, { buffer = true, desc = 'Debug Selection' })
+      end,
+    })
+
     -- Configuración para C/C++ con CodeLLDB
     local mason_registry = require 'mason-registry'
 
     if mason_registry.is_installed 'codelldb' then
       local codelldb = mason_registry.get_package 'codelldb'
-      local extension_path = codelldb:get_install_path() .. '/extension/codelldb'
-      local adapter_path = extension_path .. '/adapter/codelldb'
+      local extension_path = codelldb:get_install_path() .. '/extension/'
+      local adapter_path = extension_path .. 'adapter/codelldb'
 
-      -- Asegúrate de que el ejecutable existe
       if vim.fn.filereadable(adapter_path) == 1 then
         dap.adapters.codelldb = {
           type = 'server',
@@ -116,34 +212,28 @@ return {
             type = 'codelldb',
             request = 'launch',
             program = function()
-              -- Obtener el nombre del archivo sin extensión
               local file = vim.fn.expand '%:t:r'
-              -- Comando para compilar el programa con gcc
               local cmd = 'gcc -g -o ' .. file .. ' ' .. vim.fn.expand '%'
-              -- Ejecutar el comando de compilación en una terminal dividida
               vim.cmd('split | terminal ' .. cmd)
-              -- Cambiar al modo insert en la terminal para ver la salida
               vim.cmd 'startinsert'
-              -- Retornar la ruta completa del ejecutable
               return vim.fn.getcwd() .. '/' .. file
             end,
             cwd = '${workspaceFolder}',
             stopOnEntry = false,
-            args = {}, -- Puedes añadir argumentos aquí si tu programa los necesita
+            args = {},
             runInTerminal = false,
           },
         }
 
-        -- Corregir el typo en la configuración de C++
         dap.configurations.cpp = dap.configurations.c
-        vim.notify('El ejecutable de CodeLLDB no se encuentra en la ruta esperada: ' .. adapter_path, vim.log.levels.ERROR)
+      else
+        vim.notify('CodeLLDB executable not found: ' .. adapter_path, vim.log.levels.ERROR)
       end
     end
 
-    -- Configuración para Go (si es necesario)
+    -- Configuración para Go
     require('dap-go').setup {
       delve = {
-        -- En Windows, delve debe ejecutarse adjunto o se bloquea
         detached = vim.fn.has 'win32' == 0,
       },
     }

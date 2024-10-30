@@ -21,7 +21,7 @@ return {
     },
     opts = {
       templates = {
-        folder = '~/life/obsidian/',
+        folder = '~/obsidian',
       },
       workspaces = {
         {
@@ -35,7 +35,7 @@ return {
       },
       {
         name = 'diarios',
-        path = '~/life',
+        path = '~/life/diarios',
       },
       mappings = {
         -- Overrides 'gf' mapping to work on markdown/wiki links within your vault.
